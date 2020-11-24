@@ -19,12 +19,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@main
-      - name: Cache cargo modules
+      - name: Cache musl cross toolchain
         uses: actions/cache@v2
         with:
           path: |
             ~/x86_64-linux-musl-native
             ~/x86_64-linux-musl-cross
+          key: ${{ runner.os }}-musl-toolchain
       - name: Build
         shell: bash
         run: |
