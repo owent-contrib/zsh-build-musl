@@ -1,0 +1,54 @@
+name: "Build On Linux"
+
+on: # @see https://help.github.com/en/articles/events-that-trigger-workflows#webhook-events
+  push:
+    branches: # Array of patterns that match refs/heads
+      - main # Push events on main branch
+    tags:
+      - "*"
+
+jobs:
+  native_build: # job id, can be any string
+    # Job name is Build And Publish
+    name: Build
+    # This job runs on Linux
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+      - name: Cache cargo modules
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/x86_64-linux-musl-native
+            ~/x86_64-linux-musl-cross
+      - name: Build
+        shell: bash
+        run: |
+          bash "$GITHUB_WORKSPACE/build.sh"
+
+      - name: Prepare package
+        shell: bash
+        if: ${{ contains(github.ref, 'refs/tags/') }}
+        run: |
+          
+          for ZSH_PREBUILT_DIR in /opt/zsh/zsh-*.* ; do
+            OUTPUT_PUT_NAME="$(basename $ZSH_PREBUILT_DIR).tar.xz";
+            if [[ -e "$OUTPUT_PUT_NAME" ]]; then
+              rm -rf "$OUTPUT_PUT_NAME" ;
+            fi
+            tar -Jcvf "$OUTPUT_PUT_NAME" $ZSH_PREBUILT_DIR ;
+          done
+      - uses: xresloader/upload-to-github-release@master
+        if: ${{ contains(github.ref, 'refs/tags/') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          file: "*.tar.xz"
+          tags: true
+          draft: false
+          prerelease: false
+          overwrite: true
