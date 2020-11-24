@@ -48,7 +48,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "*.tar.xz"
+          file: "zsh-*.tar.xz"
           tags: true
           draft: false
           prerelease: false
