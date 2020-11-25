@@ -7,8 +7,12 @@ PCRE_VERSION=8.44
 ZLIB_VERSION=1.2.11
 LIBCAP_VERSION=2.45
 
-ZSH_TOOLCHAIN_PREFIX=$PWD/$ZSH_VERSION-toolchain
-ZSH_PREFIX=/opt/zsh/zsh-$ZSH_VERSION
+if [[ -z "$ZSH_TOOLCHAIN_PREFIX" ]]; then
+    ZSH_TOOLCHAIN_PREFIX=$PWD/$ZSH_VERSION-toolchain
+fi
+if [[ -z "$ZSH_PREFIX" ]]; then
+    ZSH_PREFIX=/opt/zsh/zsh-$ZSH_VERSION
+fi
 
 # echo "TOKEN" | docker login ;
 # docker pull docker.io/muslcc/x86_64:x86_64-linux-musl ;
@@ -35,19 +39,19 @@ BUILD_THREAD_OPT="-j$BUILD_THREAD_OPT" ;
 
 
 if [[ -z "$CFLAGS" ]]; then
-    export CFLAGS="-fPIC -I$ZSH_TOOLCHAIN_PREFIX/include";
+    export CFLAGS="-fPIC -I$ZSH_TOOLCHAIN_PREFIX/include -I$ZSH_PREFIX/include";
 else
-    export CFLAGS="$CFLAGS -fPIC -I$ZSH_TOOLCHAIN_PREFIX/include";
+    export CFLAGS="$CFLAGS -fPIC -I$ZSH_TOOLCHAIN_PREFIX/include -I$ZSH_PREFIX/include";
 fi
 if [[ -z "$CXXFLAGS" ]]; then
-    export CXXFLAGS="-fPIC -I$ZSH_TOOLCHAIN_PREFIX/include";
+    export CXXFLAGS="-fPIC -I$ZSH_TOOLCHAIN_PREFIX/include -I$ZSH_PREFIX/include";
 else
-    export CXXFLAGS="$CXXFLAGS -fPIC -I$ZSH_TOOLCHAIN_PREFIX/include";
+    export CXXFLAGS="$CXXFLAGS -fPIC -I$ZSH_TOOLCHAIN_PREFIX/include -I$ZSH_PREFIX/include";
 fi
 if [[ -z "$LDFLAGS" ]]; then
-    export LDFLAGS="-L$ZSH_TOOLCHAIN_PREFIX/lib64 -L$ZSH_TOOLCHAIN_PREFIX/lib -static";
+    export LDFLAGS="-L$ZSH_TOOLCHAIN_PREFIX/lib64 -L$ZSH_TOOLCHAIN_PREFIX/lib -L$ZSH_PREFIX/lib -static";
 else
-    export LDFLAGS="$LDFLAGS -L$ZSH_TOOLCHAIN_PREFIX/lib64 -L$ZSH_TOOLCHAIN_PREFIX/lib -static";
+    export LDFLAGS="$LDFLAGS -L$ZSH_TOOLCHAIN_PREFIX/lib64 -L$ZSH_TOOLCHAIN_PREFIX/lib -L$ZSH_PREFIX/lib -static";
 fi
 
 NATIVE_CC="$(readlink -f $(which gcc))"
@@ -56,7 +60,7 @@ NATIVE_CXX="$(readlink -f $(which g++))"
 export CC=$TOOLCHAIN_DIR/bin/x86_64-linux-musl-gcc ;
 export CXX=$TOOLCHAIN_DIR/bin/x86_64-linux-musl-g++ ;
 export LD=$TOOLCHAIN_DIR/bin/ld ;
-export PATH=$TOOLCHAIN_DIR/bin:$PATH ;
+export PATH=$TOOLCHAIN_DIR/bin:$ZSH_PREFIX/bin:$PATH ;
 if [[ "x$PKG_CONFIG_PATH" == "x" ]]; then
     export PKG_CONFIG_PATH="$ZSH_TOOLCHAIN_PREFIX/lib/pkgconfig"
 else
@@ -66,7 +70,7 @@ fi
 curl -kL http://zlib.net/zlib-$ZLIB_VERSION.tar.gz -o zlib-$ZLIB_VERSION.tar.gz ;
 tar -axvf zlib-$ZLIB_VERSION.tar.gz ;
 cd zlib-$ZLIB_VERSION ;
-./configure --prefix=$ZSH_TOOLCHAIN_PREFIX --static ;
+./configure --prefix=$ZSH_TOOLCHAIN_PREFIX "--eprefix=$ZSH_PREFIX" --static ;
 make $BUILD_THREAD_OPT || make ;
 make install ;
 cd .. ;
@@ -75,22 +79,24 @@ curl -kL "https://invisible-mirror.net/archives/ncurses/ncurses-$NCURSES_VERSION
 tar -axvf ncurses-$NCURSES_VERSION.tar.gz ;
 cd ncurses-$NCURSES_VERSION ;
 make clean || true;
-./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--with-pkg-config-libdir=$ZSH_TOOLCHAIN_PREFIX/lib/pkgconfig"     \
-    --with-normal --without-debug --without-ada --with-termlib --enable-termcap             \
-    --enable-pc-files --with-cxx-binding                                   \
-    --enable-ext-colors --enable-ext-mouse --enable-bsdpad --enable-opaque-curses           \
-    --with-terminfo-dirs=/etc/terminfo:/usr/share/terminfo:/lib/terminfo                    \
+./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--exec-prefix=$ZSH_PREFIX"            \
+    "--with-pkg-config-libdir=$ZSH_TOOLCHAIN_PREFIX/lib/pkgconfig"                  \
+    --with-normal --without-debug --without-ada --with-termlib --enable-termcap     \
+    --enable-pc-files --with-cxx-binding                                            \
+    --enable-ext-colors --enable-ext-mouse --enable-bsdpad --enable-opaque-curses   \
+    --with-terminfo-dirs=/etc/terminfo:/usr/share/terminfo:/lib/terminfo            \
     --with-termpath=/etc/termcap:/usr/share/misc/termcap ;
 
 make $BUILD_THREAD_OPT || make ;
 make install ;
 
 make clean ;
-./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--with-pkg-config-libdir=$ZSH_TOOLCHAIN_PREFIX/lib/pkgconfig"     \
-    --with-normal --without-debug --without-ada --with-termlib --enable-termcap             \
-    --enable-widec --enable-pc-files --with-cxx-binding                                     \
-    --enable-ext-colors --enable-ext-mouse --enable-bsdpad --enable-opaque-curses           \
-    --with-terminfo-dirs=/etc/terminfo:/usr/share/terminfo:/lib/terminfo                    \
+./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--exec-prefix=$ZSH_PREFIX"            \
+    "--with-pkg-config-libdir=$ZSH_TOOLCHAIN_PREFIX/lib/pkgconfig"                  \
+    --with-normal --without-debug --without-ada --with-termlib --enable-termcap     \
+    --enable-widec --enable-pc-files --with-cxx-binding                             \
+    --enable-ext-colors --enable-ext-mouse --enable-bsdpad --enable-opaque-curses   \
+    --with-terminfo-dirs=/etc/terminfo:/usr/share/terminfo:/lib/terminfo            \
     --with-termpath=/etc/termcap:/usr/share/misc/termcap ;
 
 make $BUILD_THREAD_OPT || make ;
@@ -106,7 +112,7 @@ fi
 curl -kL https://ftp.gnu.org/gnu/readline/readline-$READLINE_VERSION.tar.gz -o readline-$READLINE_VERSION.tar.gz ;
 tar -axvf readline-$READLINE_VERSION.tar.gz ;
 cd readline-$READLINE_VERSION ;
-./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" --enable-static=yes --enable-shared=no --enable-multibyte --with-curses ;
+./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--exec-prefix=$ZSH_PREFIX" --enable-static=yes --enable-shared=no --enable-multibyte --with-curses ;
 make $BUILD_THREAD_OPT || make ;
 make install ;
 cd .. ;
@@ -114,8 +120,8 @@ cd .. ;
 curl -kL https://ftp.pcre.org/pub/pcre/pcre-$PCRE_VERSION.tar.gz -o pcre-$PCRE_VERSION.tar.gz;
 tar -axvf pcre-$PCRE_VERSION.tar.gz ;
 cd pcre-$PCRE_VERSION ;
-./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" --with-pic=yes --enable-shared=no --enable-static=yes      \
-    --enable-utf --enable-unicode-properties --enable-pcre16 --enable-pcre32 --enable-jit               \
+./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--exec-prefix=$ZSH_PREFIX" --with-pic=yes --enable-shared=no --enable-static=yes  \
+    --enable-utf --enable-unicode-properties --enable-pcre16 --enable-pcre32 --enable-jit                                       \
     --enable-pcregrep-libz --enable-pcretest-libreadline
 make $BUILD_THREAD_OPT || make ;
 make install ;
@@ -133,7 +139,7 @@ cd .. ;
 curl -kL https://ftp.gnu.org/gnu/gdbm/gdbm-$GDBM_VERSION.tar.gz -o gdbm-$GDBM_VERSION.tar.gz ;
 tar -axvf gdbm-$GDBM_VERSION.tar.gz ;
 cd gdbm-$GDBM_VERSION;
-env CFLAGS="$CFLAGS -fcommon" ./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" --with-pic=yes --enable-shared=no --enable-static=yes ;
+env CFLAGS="$CFLAGS -fcommon" ./configure "--prefix=$ZSH_PREFIX" --with-pic=yes --enable-shared=no --enable-static=yes ;
 make $BUILD_THREAD_OPT || make ;
 make install ;
 cd .. ;
