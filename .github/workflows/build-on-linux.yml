@@ -37,7 +37,7 @@ jobs:
         run: |
           
           for ZSH_PREBUILT_DIR in /opt/zsh/zsh-*.* ; do
-            OUTPUT_PUT_NAME="$(basename $ZSH_PREBUILT_DIR).tar.xz";
+            OUTPUT_PUT_NAME="$(basename $ZSH_PREBUILT_DIR)-x86_64-unknown-linux-musl.tar.xz";
             if [[ -e "$OUTPUT_PUT_NAME" ]]; then
               rm -rf "$OUTPUT_PUT_NAME" ;
             fi

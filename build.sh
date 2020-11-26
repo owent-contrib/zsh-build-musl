@@ -208,7 +208,7 @@ if [[ ! -e "zsh-$ZSH_VERSION.tar.xz" ]]; then
 fi
 tar -axvf zsh-$ZSH_VERSION.tar.xz ;
 cd zsh-$ZSH_VERSION ;
-env LDFLAGS="$LDFLAGS -rpath=\$ORIGIN/../lib" ./configure --host=$CHOST --build=$CBUILD    \
+env LDFLAGS="$LDFLAGS -Wl,-rpath=\$ORIGIN/../lib" ./configure --host=$CHOST --build=$CBUILD    \
         "--prefix=$ZSH_PREFIX"              \
         --docdir=/usr/share/doc/zsh         \
         --htmldir=/usr/share/doc/zsh/html   \
@@ -223,9 +223,11 @@ env LDFLAGS="$LDFLAGS -rpath=\$ORIGIN/../lib" ./configure --host=$CHOST --build=
         --enable-multibyte                  \
         --enable-zsh-secure-free            \
         --enable-function-subdirs           \
-        --enable-pcre --enable-cap          \
+        --enable-pcre=yes                   \
+        --enable-cap=yes                    \
         --enable-unicode9                   \
-        --with-tcsetpgrp ;
+        --with-tcsetpgrp                    \
+        --enable-libc-musl ;
 make $BUILD_THREAD_OPT || make ;
 if [[ $? -ne 0 ]]; then
     exit 1;
