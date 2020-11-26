@@ -1,3 +1,5 @@
+#!/bin/bash
+
 ZSH_VERSION=5.8
 MUSL_VERSION=1.2.1
 GDBM_VERSION=1.18.1
@@ -13,6 +15,15 @@ fi
 if [[ -z "$ZSH_PREFIX" ]]; then
     ZSH_PREFIX=/opt/zsh/zsh-$ZSH_VERSION
 fi
+
+# x86_64-unknown-linux-musl
+OS_NAME=$(cat /etc/os-release | grep "^ID=" | awk 'BEGIN{FS="="}{print $2}') ;
+eval "OS_NAME=$OS_NAME" ; # unwraper " 
+if [[ -z "$OS_NAME" ]]; then
+    OS_NAME="unknown" ;
+fi
+CHOST=$(echo "$(uname -p)-$OS_NAME-$(uname -s)" | tr '[:upper:]' '[:lower:]')
+CBUILD=x86_64-unknown-linux-musl
 
 # echo "TOKEN" | docker login ;
 # docker pull docker.io/muslcc/x86_64:x86_64-linux-musl ;
@@ -49,37 +60,53 @@ else
     export CXXFLAGS="$CXXFLAGS -fPIC -I$ZSH_TOOLCHAIN_PREFIX/include -I$ZSH_PREFIX/include";
 fi
 if [[ -z "$LDFLAGS" ]]; then
-    export LDFLAGS="-L$ZSH_TOOLCHAIN_PREFIX/lib64 -L$ZSH_TOOLCHAIN_PREFIX/lib -L$ZSH_PREFIX/lib -static";
+    export LDFLAGS="-L$ZSH_TOOLCHAIN_PREFIX/lib64 -L$ZSH_TOOLCHAIN_PREFIX/lib -L$ZSH_PREFIX/lib";
 else
-    export LDFLAGS="$LDFLAGS -L$ZSH_TOOLCHAIN_PREFIX/lib64 -L$ZSH_TOOLCHAIN_PREFIX/lib -L$ZSH_PREFIX/lib -static";
+    export LDFLAGS="$LDFLAGS -L$ZSH_TOOLCHAIN_PREFIX/lib64 -L$ZSH_TOOLCHAIN_PREFIX/lib -L$ZSH_PREFIX/lib";
 fi
 
-NATIVE_CC="$(readlink -f $(which gcc))"
-NATIVE_CXX="$(readlink -f $(which g++))"
+BUILD_CC="$(readlink -f $(which gcc))"
+BUILD_CXX="$(readlink -f $(which g++))"
+BUILD_AR="$(readlink -f $(which ar))"
+BUILD_NM="$(readlink -f $(which nm))"
+BUILD_RANLIB="$(readlink -f $(which ranlib))"
 
-export CC=$TOOLCHAIN_DIR/bin/x86_64-linux-musl-gcc ;
-export CXX=$TOOLCHAIN_DIR/bin/x86_64-linux-musl-g++ ;
-export LD=$TOOLCHAIN_DIR/bin/ld ;
-export PATH=$TOOLCHAIN_DIR/bin:$ZSH_PREFIX/bin:$PATH ;
+export CC="$TOOLCHAIN_DIR/bin/x86_64-linux-musl-gcc" ;
+export CXX="$TOOLCHAIN_DIR/bin/x86_64-linux-musl-g++" ;
+## export LD="$TOOLCHAIN_DIR/bin/x86_64-linux-musl-ld" ;
+export AR="$TOOLCHAIN_DIR/bin/x86_64-linux-musl-gcc-ar" ;
+export NM="$TOOLCHAIN_DIR/bin/x86_64-linux-musl-gcc-nm" ;
+export RANLIB="$TOOLCHAIN_DIR/bin/x86_64-linux-musl-gcc-ranlib" ;
+export PATH="$TOOLCHAIN_DIR/bin:$ZSH_PREFIX/bin:$PATH" ;
+
 if [[ "x$PKG_CONFIG_PATH" == "x" ]]; then
     export PKG_CONFIG_PATH="$ZSH_TOOLCHAIN_PREFIX/lib/pkgconfig"
 else
     export PKG_CONFIG_PATH="$ZSH_TOOLCHAIN_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
 fi
 
-curl -kL http://zlib.net/zlib-$ZLIB_VERSION.tar.gz -o zlib-$ZLIB_VERSION.tar.gz ;
+if [[ ! -e "zlib-$ZLIB_VERSION.tar.gz" ]]; then
+    curl -kL http://zlib.net/zlib-$ZLIB_VERSION.tar.gz -o zlib-$ZLIB_VERSION.tar.gz ;
+fi
 tar -axvf zlib-$ZLIB_VERSION.tar.gz ;
 cd zlib-$ZLIB_VERSION ;
-./configure --prefix=$ZSH_TOOLCHAIN_PREFIX "--eprefix=$ZSH_PREFIX" --static ;
+./configure --prefix=$ZSH_TOOLCHAIN_PREFIX --static ;
 make $BUILD_THREAD_OPT || make ;
+if [[ $? -ne 0 ]]; then
+    exit 1;
+fi
 make install ;
 cd .. ;
 
-curl -kL "https://invisible-mirror.net/archives/ncurses/ncurses-$NCURSES_VERSION.tar.gz" -o ncurses-$NCURSES_VERSION.tar.gz ;
+if [[ ! -e "ncurses-$NCURSES_VERSION.tar.gz" ]]; then
+    curl -kL "https://invisible-mirror.net/archives/ncurses/ncurses-$NCURSES_VERSION.tar.gz" -o ncurses-$NCURSES_VERSION.tar.gz ;
+fi
 tar -axvf ncurses-$NCURSES_VERSION.tar.gz ;
 cd ncurses-$NCURSES_VERSION ;
 make clean || true;
-./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--exec-prefix=$ZSH_PREFIX"            \
+env LDFLAGS="$LDFLAGS -static" ./configure --host=$CHOST --build=$CBUILD            \
+    --with-build-cc=$BUILD_CC --with-build-cpp=$BUILD_CXX                           \
+    "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--exec-prefix=$ZSH_PREFIX"                    \
     "--with-pkg-config-libdir=$ZSH_TOOLCHAIN_PREFIX/lib/pkgconfig"                  \
     --with-normal --without-debug --without-ada --with-termlib --enable-termcap     \
     --enable-pc-files --with-cxx-binding                                            \
@@ -88,10 +115,15 @@ make clean || true;
     --with-termpath=/etc/termcap:/usr/share/misc/termcap ;
 
 make $BUILD_THREAD_OPT || make ;
+if [[ $? -ne 0 ]]; then
+    exit 1;
+fi
 make install ;
 
 make clean ;
-./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--exec-prefix=$ZSH_PREFIX"            \
+env LDFLAGS="$LDFLAGS -static" ./configure --host=$CHOST --build=$CBUILD            \
+    --with-build-cc=$BUILD_CC --with-build-cpp=$BUILD_CXX                           \
+    "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--exec-prefix=$ZSH_PREFIX"                    \
     "--with-pkg-config-libdir=$ZSH_TOOLCHAIN_PREFIX/lib/pkgconfig"                  \
     --with-normal --without-debug --without-ada --with-termlib --enable-termcap     \
     --enable-widec --enable-pc-files --with-cxx-binding                             \
@@ -100,6 +132,9 @@ make clean ;
     --with-termpath=/etc/termcap:/usr/share/misc/termcap ;
 
 make $BUILD_THREAD_OPT || make ;
+if [[ $? -ne 0 ]]; then
+    exit 1;
+fi
 make install ;
 cd .. ;
 if [[ -z "$LIBS" ]]; then
@@ -108,46 +143,73 @@ else
     export LIBS="$LIBS -ltinfow";
 fi
 
-
-curl -kL https://ftp.gnu.org/gnu/readline/readline-$READLINE_VERSION.tar.gz -o readline-$READLINE_VERSION.tar.gz ;
+if [[ ! -e "readline-$READLINE_VERSION.tar.gz" ]]; then
+    curl -kL https://ftp.gnu.org/gnu/readline/readline-$READLINE_VERSION.tar.gz -o readline-$READLINE_VERSION.tar.gz ;
+fi
 tar -axvf readline-$READLINE_VERSION.tar.gz ;
 cd readline-$READLINE_VERSION ;
-./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--exec-prefix=$ZSH_PREFIX" --enable-static=yes --enable-shared=no --enable-multibyte --with-curses ;
+env LDFLAGS="$LDFLAGS -static" ./configure --host=$CHOST --build=$CBUILD            \
+    "--prefix=$ZSH_TOOLCHAIN_PREFIX" --enable-static=yes --enable-shared=no         \
+    --enable-multibyte --with-curses ;
 make $BUILD_THREAD_OPT || make ;
+if [[ $? -ne 0 ]]; then
+    exit 1;
+fi
 make install ;
 cd .. ;
 
-curl -kL https://ftp.pcre.org/pub/pcre/pcre-$PCRE_VERSION.tar.gz -o pcre-$PCRE_VERSION.tar.gz;
+if [[ ! -e "pcre-$PCRE_VERSION.tar.gz" ]]; then
+    curl -kL https://ftp.pcre.org/pub/pcre/pcre-$PCRE_VERSION.tar.gz -o pcre-$PCRE_VERSION.tar.gz;
+fi
 tar -axvf pcre-$PCRE_VERSION.tar.gz ;
 cd pcre-$PCRE_VERSION ;
-./configure "--prefix=$ZSH_TOOLCHAIN_PREFIX" "--exec-prefix=$ZSH_PREFIX" --with-pic=yes --enable-shared=no --enable-static=yes  \
-    --enable-utf --enable-unicode-properties --enable-pcre16 --enable-pcre32 --enable-jit                                       \
+# --with-pic=yes
+./configure --host=$CHOST --build=$CBUILD                                                   \
+    "--prefix=$ZSH_PREFIX"  --enable-shared=yes --enable-static=yes                         \
+    --enable-utf --enable-unicode-properties --enable-pcre16 --enable-pcre32 --enable-jit   \
     --enable-pcregrep-libz --enable-pcretest-libreadline
 make $BUILD_THREAD_OPT || make ;
+if [[ $? -ne 0 ]]; then
+    exit 1;
+fi
 make install ;
 cd .. ;
 
 # libcap require kernel headers and built with static linking
-curl -kL https://mirrors.edge.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-$LIBCAP_VERSION.tar.xz -o libcap-$LIBCAP_VERSION.tar.xz ;
+if [[ ! -e "libcap-$LIBCAP_VERSION.tar.xz" ]]; then
+    curl -kL https://mirrors.edge.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-$LIBCAP_VERSION.tar.xz -o libcap-$LIBCAP_VERSION.tar.xz ;
+fi
 tar -axvf libcap-$LIBCAP_VERSION.tar.xz ;
 cd libcap-$LIBCAP_VERSION ;
 # CC=$ZSH_TOOLCHAIN_PREFIX/bin/musl-gcc
 # LD_LIBRARY_PATH=$TOOLCHAIN_DIR/lib:$LD_LIBRARY_PATH
-make RAISE_SETFCAP='no' SHARED='no' CC=$CC BUILD_CC="$NATIVE_CC" LD=$LD CROSS_COMPILE=x86_64-linux-musl-gcc- prefix=$ZSH_TOOLCHAIN_PREFIX install ;
+env LDFLAGS="$LDFLAGS -static" make RAISE_SETFCAP='no' SHARED='no' CC=$CC BUILD_CC="$BUILD_CC" LD=$LD CROSS_COMPILE=x86_64-linux-musl-gcc- prefix=$ZSH_TOOLCHAIN_PREFIX install ;
+if [[ $? -ne 0 ]]; then
+    exit 1;
+fi
 cd .. ;
 
-curl -kL https://ftp.gnu.org/gnu/gdbm/gdbm-$GDBM_VERSION.tar.gz -o gdbm-$GDBM_VERSION.tar.gz ;
+if [[ ! -e "gdbm-$GDBM_VERSION.tar.gz" ]]; then
+    curl -kL https://ftp.gnu.org/gnu/gdbm/gdbm-$GDBM_VERSION.tar.gz -o gdbm-$GDBM_VERSION.tar.gz ;
+fi
 tar -axvf gdbm-$GDBM_VERSION.tar.gz ;
 cd gdbm-$GDBM_VERSION;
-env CFLAGS="$CFLAGS -fcommon" ./configure "--prefix=$ZSH_PREFIX" --with-pic=yes --enable-shared=no --enable-static=yes ;
+env CFLAGS="$CFLAGS -fcommon" LDFLAGS="$LDFLAGS -static" ./configure --host=$CHOST --build=$CBUILD  \
+    "--prefix=$ZSH_PREFIX" --with-pic=yes --enable-shared=no --enable-static=yes ;
 make $BUILD_THREAD_OPT || make ;
 make install ;
+if [[ $? -ne 0 ]]; then
+    exit 1;
+fi
 cd .. ;
 
-curl -kL https://nchc.dl.sourceforge.net/project/zsh/zsh/$ZSH_VERSION/zsh-$ZSH_VERSION.tar.xz -o zsh-$ZSH_VERSION.tar.xz ;
+if [[ ! -e "zsh-$ZSH_VERSION.tar.xz" ]]; then
+    curl -kL https://nchc.dl.sourceforge.net/project/zsh/zsh/$ZSH_VERSION/zsh-$ZSH_VERSION.tar.xz -o zsh-$ZSH_VERSION.tar.xz ;
+fi
 tar -axvf zsh-$ZSH_VERSION.tar.xz ;
 cd zsh-$ZSH_VERSION ;
-./configure "--prefix=$ZSH_PREFIX"          \
+env LDFLAGS="$LDFLAGS -rpath=\$ORIGIN/../lib" ./configure --host=$CHOST --build=$CBUILD    \
+        "--prefix=$ZSH_PREFIX"              \
         --docdir=/usr/share/doc/zsh         \
         --htmldir=/usr/share/doc/zsh/html   \
         --enable-etcdir=/etc/zsh            \
@@ -160,10 +222,13 @@ cd zsh-$ZSH_VERSION ;
         --with-term-lib='ncursesw'          \
         --enable-multibyte                  \
         --enable-zsh-secure-free            \
-        --enable-function-subdirs                   \
-        --enable-pcre --enable-cap                  \
-        --enable-unicode9 --enable-libc-musl        \
+        --enable-function-subdirs           \
+        --enable-pcre --enable-cap          \
+        --enable-unicode9                   \
         --with-tcsetpgrp ;
 make $BUILD_THREAD_OPT || make ;
+if [[ $? -ne 0 ]]; then
+    exit 1;
+fi
 make install ;
 cd .. ;
